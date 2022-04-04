@@ -1,0 +1,112 @@
+#include <ESP8266WiFi.h>
+#include <ThingerESP8266.h>
+#include "DHT.h"
+
+#define DHTPIN D2
+#define buzzer D1
+#define gasThreshold 210
+#define led D5
+#define ldrInput D6
+
+#define USERNAME "bvspadmaja"
+#define DEVICE_ID "coal_mine"
+#define DEVICE_CREDENTIAL "UU&kJlemsD8b"
+
+#define ssid "gopal"
+#define SSID_PASSWORD "bvspgopal"
+
+#define DHTTYPE DHT11
+
+DHT dht(DHTPIN, DHTTYPE);
+
+int temp = 0;
+int humidity = 0;
+int gas = 0;
+int buzzCtrl;
+//int fire;
+int ldrStatus;
+
+ThingerESP8266 thing(USERNAME, DEVICE_ID, DEVICE_CREDENTIAL);
+
+void setup() {  
+  Serial.begin(115200);
+
+  pinMode(buzzer, OUTPUT);
+  pinMode(led, OUTPUT);
+  pinMode(ldrInput, INPUT);
+  digitalWrite(buzzer, LOW);
+  
+  Serial.print("Connecting to ");  
+  Serial.println(ssid);  
+  WiFi.begin(ssid, SSID_PASSWORD);  
+  while (WiFi.status() != WL_CONNECTED)  
+  {  
+   delay(500);  
+   Serial.print(".");  
+  } 
+   Serial.println("");  
+  Serial.println("WiFi connected");  
+  // Print the IP address  
+  Serial.println(WiFi.localIP());
+
+  noInterrupts();
+  attachInterrupt(D3, fireSense, FALLING);
+  interrupts();
+
+  dht.begin();
+
+  // digital pin control example (i.e. turning on/off a light, a relay, configuring a parameter, etc)
+  thing["control"] << inputValue(buzzCtrl);
+ 
+  // resource output example (i.e. reading a sensor value)
+  thing["gas"] >> outputValue(gas);
+  thing["dht11 - Humidity"] >> outputValue(humidity);
+  thing["dht11 - Temperature"] >> outputValue(temp);
+  thing["ldr"] >> outputValue(ldrStatus);
+
+
+  delay(2000);
+}
+
+void loop() {
+  delay(500);
+
+  ldrStatus = digitalRead(ldrInput);
+  if (ldrStatus == 1)
+    digitalWrite(led, HIGH);
+  else
+    digitalWrite(led, LOW);
+  
+  int t = 0;
+  t = dht.readTemperature();
+  if (t < 200) 
+    temp = t;
+
+  t = dht.readHumidity();
+  if (t<200)
+    humidity = t;
+   
+
+    Serial.print("Humidity: ");
+    Serial.print(humidity);
+    Serial.print(" %\t");
+    Serial.print("Temperature: ");
+    Serial.print(temp);
+    Serial.print(" *C\tGas: ");
+    gas = analogRead(A0);
+    Serial.println(gas);
+    if (gas > gasThreshold)
+      digitalWrite(buzzer, HIGH);
+    if (gas <= gasThreshold)
+      digitalWrite(buzzer, LOW);
+    if (buzzCtrl == 1)
+      digitalWrite(buzzer, LOW);
+
+  thing.handle();
+}
+
+void fireSense()
+{
+    thing.call_endpoint("firealerts");
+    Serial.println("******** Fire Alert SENT! **********");
+}
